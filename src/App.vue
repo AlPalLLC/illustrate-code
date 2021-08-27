@@ -3,27 +3,31 @@
     <div 
       class="
         h-full w-full max-w-6
-        flex flex-col gap-6 p-8
-        bg-gray-900 rounded-5 overflow-scroll
+        flex flex-col gap-5 p-6
+        bg-gray-90 rounded-5 overflow-scroll
       "
     >
       <div
-        v-for="{ indentation, tokens } in lines"
-        class="flex items-center gap-4"
-        :style="{
-          paddingLeft: `${indentation * 2}rem`,
-        }"
+        v-for="{ indentationWidth, tokens } in lines"
+        class="flex items-center"
       >
         <div
-          v-for="{ type, width } in tokens"
-          class="flex-shrink-0 h-5 rounded-full"
-          :class="[
-            toBg(type)
-          ]"
           :style="{
-            width: `${width}%`,
+            width: `${indentationWidth}%`,
           }"
-        />
+        ></div>
+        <div class="w-full flex items-center" :style="{ gap: `${TOKEN_GAP}%` }">
+          <div
+            v-for="{ type, width } in tokens"
+            class="flex-shrink-0 h-5 rounded-full"
+            :class="[
+              toBg(type)
+            ]"
+            :style="{
+              width: `${width}%`,
+            }"
+          ></div>
+        </div>
       </div>
     </div>
   </main>
@@ -31,22 +35,29 @@
 
 <script lang="ts">
 import { defineComponent, ref } from 'vue'
+import { createClamp } from '@baleada/logic'
+
+const TOKEN_GAP = 3,
+      BASE_INDENTATION_WIDTH = 5,
+      MAX_TOKEN_WIDTH = 60,
+      MIN_TOKEN_WIDTH = 5
 
 export default defineComponent({
   setup () {
-    const lines = ref(toLines(7))
+    const lines = ref(toLines(10))
 
     console.log(lines.value)
 
     return {
       lines,
       toBg,
+      TOKEN_GAP
     }
   }
 })
 
 type Line = {
-  indentation: number,
+  indentationWidth: number,
   tokens: Token[],
 }
 
@@ -59,11 +70,19 @@ function toLines (n: number): Line[] {
               return 0
             }
 
-            if (i === n) {
+            if (i === n - 1) {
               return 0
             }
 
-            const previousIndentation = lines[i - 1].indentation
+            // Maintain indentation after empty line
+            if (i >= 3) {
+              if (lines[i - 1].tokens[0].type === 0) {
+                const previousNonEmptyIndentation = lines[i - 2].indentationWidth
+                return previousNonEmptyIndentation / BASE_INDENTATION_WIDTH
+              }
+            }
+
+            const previousIndentation = lines[i - 1].indentationWidth / BASE_INDENTATION_WIDTH
 
             // Transition to reach 0 at the last line
             if (n - i - previousIndentation === 0) {
@@ -88,9 +107,9 @@ function toLines (n: number): Line[] {
 
             // Otherwise, pick one
             const outcome = toOutcome([
-              { outcome: 'none', probability: .1 },
+              { outcome: 'none', probability: .10 },
               { outcome: 'in', probability: .55 },
-              { outcome: 'out', probability: .55 },
+              { outcome: 'out', probability: .35 },
             ])
 
             if (outcome === 'none') {
@@ -101,16 +120,43 @@ function toLines (n: number): Line[] {
               return previousIndentation - 1
             }
           })(),
+          indentationWidth = indentation * BASE_INDENTATION_WIDTH,
           tokens: Token[] = [],
-          totalTokens = Math.ceil(Math.random() * 6),
-          widths = new Array(totalTokens).fill(0).reduce(({ widths, remainingWidth }) => {
-            const width = Math.floor(remainingWidth * Math.random())
-
-            return {
-              widths: [...widths, width],
-              remainingWidth: remainingWidth - width,
+          probabilityOfEmptyLine = (() => {
+            // Always have code on first and last line
+            if (i === 0 || i === n - 1) {
+              return 0
             }
-          }, { widths: [], remainingWidth: 100 }).widths
+
+            const previousLineType = lines[i - 1].tokens[0].type === 0 ? 'empty' : 'code'
+            return previousLineType === 'empty' ? 0 : .15
+          })(),
+          lineType = toOutcome([
+            { outcome: 'empty', probability: probabilityOfEmptyLine },
+            { outcome: 'code', probability: 1 - probabilityOfEmptyLine }
+          ]),
+          totalTokens = lineType === 'empty' ? 0 : Math.ceil(Math.random() * 6),
+          widths = new Array(totalTokens)
+            .fill(0)
+            .reduce(reduced => {
+              const width = reduced.remainingWidth >= 5
+                ? createClamp({
+                    min: MIN_TOKEN_WIDTH,
+                    max: reduced.remainingWidth
+                  })(Math.floor(MAX_TOKEN_WIDTH * Math.random()))
+                : 0
+
+              reduced.widths.push(width)
+
+              return {
+                widths: reduced.widths,
+                remainingWidth: Math.max(reduced.remainingWidth - width, 0),
+              }
+            }, { widths: [], remainingWidth: 100 - ((totalTokens - 1) * TOKEN_GAP) }).widths
+
+    if (totalTokens === 0) {
+      tokens.push({ type: 0, width: 100 })
+    }
     
     for (let j = 0; j < totalTokens; j++) {
       const type = Math.ceil(Math.random() * 5),
@@ -119,7 +165,7 @@ function toLines (n: number): Line[] {
       tokens.push({ type, width })
     }
 
-    lines.push({ indentation, tokens })
+    lines.push({ indentationWidth, tokens })
   }
 
   return lines
@@ -147,6 +193,8 @@ function toOutcome (possibilities: { outcome: string, probability: number }[]): 
 
 function toBg (type: Token['type']): `bg-${string}-${number}` {
   switch (type) {
+    case 0:
+      return 'bg-gray-90'
     case 1:
       return 'bg-orange-60'
     case 2:

@@ -12,6 +12,7 @@
     "vite": "^2.4.3"
   },
   "dependencies": {
+    "@baleada/logic": "^0.20.7",
     "vue": "^3.1.5"
   }
 }
