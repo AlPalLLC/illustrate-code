@@ -8,15 +8,19 @@
       "
     >
       <div
-        v-for="{ indentationWidth, tokens } in lines"
+        v-for="({ indentationWidth, tokens }, index) in lines"
         class="flex items-center"
       >
         <div
+          class="relative"
           :style="{
             width: `${indentationWidth}%`,
           }"
         ></div>
-        <div class="w-full flex items-center" :style="{ gap: `${TOKEN_GAP}%` }">
+        <div
+          class="relative w-full flex items-center overflow-hidden"
+          :style="{ gap: `${TOKEN_GAP}%` }"
+        >
           <div
             v-for="{ type, width } in tokens"
             class="flex-shrink-0 h-5 rounded-full"
@@ -27,6 +31,16 @@
               width: `${width}%`,
             }"
           ></div>
+          <div
+            class="absolute top-0 left-0 h-full w-full bg-gray-90 rounded-full transition ease-in-out"
+            :class="[
+              codeStatus === 'typed' ? 'translate-x-full' : 'translate-x-0',
+            ]"
+            :style="{
+              transitionDuration: `${TYPING_TRANSITION_DURATION}ms`,
+              transitionDelay: `${TYPING_TRANSITION_DURATION * .5 * index}ms`,
+            }"
+          ></div>
         </div>
       </div>
     </div>
@@ -34,24 +48,31 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref } from 'vue'
+import { defineComponent, onMounted, ref } from 'vue'
 import { createClamp } from '@baleada/logic'
+import { useDelayable } from '@baleada/vue-composition'
 
 const TOKEN_GAP = 3,
       BASE_INDENTATION_WIDTH = 5,
       MAX_TOKEN_WIDTH = 60,
-      MIN_TOKEN_WIDTH = 5
+      MIN_TOKEN_WIDTH = 5,
+      TYPING_TRANSITION_DURATION = 500
 
 export default defineComponent({
   setup () {
-    const lines = ref(toLines(10))
+    const lines = ref(toLines(10)),
+          codeStatus = ref('not typed')
 
-    console.log(lines.value)
+    const type = useDelayable(() => codeStatus.value = 'typed', { delay: 200 })
+
+    onMounted(() => type.value.delay())
 
     return {
       lines,
       toBg,
-      TOKEN_GAP
+      TOKEN_GAP,
+      TYPING_TRANSITION_DURATION,
+      codeStatus,
     }
   }
 })
